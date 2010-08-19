@@ -21,6 +21,16 @@ from django.views.decorators.csrf import csrf_protect
 
 from feincms import settings
 
+if settings.FEINCMS_REVERSION:
+    from reversion import revision as revision
+    from reversion.admin import VersionAdmin 
+    from reversion.models import Revision
+    ItemEditorSuperClass = VersionAdmin
+    revision_create_on_success = revision.create_on_success
+else:
+    ItemEditorSuperClass = admin.ModelAdmin
+    revision_create_on_success = lambda func: func
+
 FRONTEND_EDITING_MATCHER = re.compile(r'(\d+)\|(\w+)\|(\d+)')
 FEINCMS_CONTENT_FIELDSET_NAME = 'FEINCMS_CONTENT'
 FEINCMS_CONTENT_FIELDSET = (FEINCMS_CONTENT_FIELDSET_NAME, {'fields': ()})
@@ -33,7 +43,7 @@ class ItemEditorForm(forms.ModelForm):
     ordering = forms.IntegerField(widget=forms.HiddenInput())
 
 
-class ItemEditor(admin.ModelAdmin):
+class ItemEditor(ItemEditorSuperClass):
     def __init__(self, *args, **kwargs):
         # Make sure all models are completely loaded before attempting to
         # proceed. The dynamic nature of FeinCMS models makes this necessary.
@@ -45,6 +55,14 @@ class ItemEditor(admin.ModelAdmin):
 
         super(ItemEditor, self).__init__(*args, **kwargs)
 
+        if settings.FEINCMS_REVERSION:
+            # register content_type "inlines" with reversion and "follow" them
+            for model in self.model._feincms_content_types:
+                self._autoregister(model)
+                revision._registry[self.model].follow += (
+                    '%s_set' % model.__name__.lower(),)
+                # update if related naming changes in Base.create_content_type
+        
     def _formfield_callback(self, request):
         if settings.DJANGO10_COMPAT:
             # This should compare for Django SVN before [9761] (From 2009-01-16),
@@ -123,6 +141,7 @@ class ItemEditor(admin.ModelAdmin):
             ) for content_type in self.model._feincms_content_types]
 
     @csrf_protect_m
+    @revision_create_on_success
     @transaction.commit_on_success
     def add_view(self, request, extra_context=None, form_url=None):
         opts = self.model._meta
@@ -278,6 +297,7 @@ class ItemEditor(admin.ModelAdmin):
         return self.render_item_editor(request, None, context)
 
     @csrf_protect_m
+    @revision_create_on_success    
     @transaction.commit_on_success
     def change_view(self, request, object_id, extra_context=None):
         self.model._needs_content_types()
@@ -300,17 +320,15 @@ class ItemEditor(admin.ModelAdmin):
         if not self.has_change_permission(request, obj):
             raise PermissionDenied
 
-        if "revision" in request.GET:
-            from reversion.models import Revision
-
+        if settings.FEINCMS_REVERSION and "revision" in request.GET:
             try:
-                revision = Revision.objects.get(pk=request.GET['revision'])
+                obj_revision = Revision.objects.get(pk=request.GET['revision'])
             except Revision.DoesNotExist:
                 raise Http404
 
             self.message_user(request, _('Click save to replace the current content with this version'))
         else:
-            revision = None
+            obj_revision = None
 
         ModelForm = self.get_form(
             request,
@@ -368,14 +386,15 @@ class ItemEditor(admin.ModelAdmin):
                 else:
                     self.message_user(request, msg)
                     return HttpResponseRedirect("../")
-        elif revision:
+        elif obj_revision:
             FORM_DATA = {}
 
             total_forms = dict(
                 [(ct.__name__.lower(), 0) for ct in self.model._feincms_content_types]
             )
 
-            for version in revision.version_set.all().select_related("content_type"):
+            for version in obj_revision.version_set.all().\
+                    select_related("content_type"):
                 if version.object_version.object == obj:
                     FORM_DATA.update(version.field_dict)
                     continue

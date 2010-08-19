@@ -93,3 +93,8 @@ FEINCMS_TIDY_FUNCTION = getattr(settings, 'FEINCMS_TIDY_FUNCTION', 'feincms.util
 # ------------------------------------------------------------------------
 #: Set to True if you want to run the FeinCMS test suite unconditionally:
 FEINCMS_RUN_TESTS = getattr(settings, 'FEINCMS_RUN_TESTS', False)
+
+# ------------------------------------------------------------------------
+#: Set to True if the ItemEditor should use django-reversion
+# (don't forget to install it first!)
+FEINCMS_REVERSION = getattr(settings, 'FEINCMS_REVERSION', False)

@@ -114,7 +114,10 @@ class ItemEditor(ItemEditorSuperClass):
                     'content': obj.render(request=request),
                     'identifier': obj.fe_identifier(),
                     'FEINCMS_ADMIN_MEDIA': settings.FEINCMS_ADMIN_MEDIA,
-                    'FEINCMS_ADMIN_MEDIA_HOTLINKING': settings.FEINCMS_ADMIN_MEDIA_HOTLINKING,
+                    'FEINCMS_ADMIN_MEDIA_HOTLINKING': \
+                        settings.FEINCMS_ADMIN_MEDIA_HOTLINKING,
+                    'FEINCMS_JQUERY_NO_CONFLICT': \
+                        settings.FEINCMS_JQUERY_NO_CONFLICT,
                     })
         else:
             form = ModelForm(instance=obj, prefix=content_type)
@@ -127,7 +130,9 @@ class ItemEditor(ItemEditorSuperClass):
             'is_popup': True,
             'media': self.media,
             'FEINCMS_ADMIN_MEDIA': settings.FEINCMS_ADMIN_MEDIA,
-            'FEINCMS_ADMIN_MEDIA_HOTLINKING': settings.FEINCMS_ADMIN_MEDIA_HOTLINKING,
+            'FEINCMS_ADMIN_MEDIA_HOTLINKING': \
+                settings.FEINCMS_ADMIN_MEDIA_HOTLINKING,
+            'FEINCMS_JQUERY_NO_CONFLICT': settings.FEINCMS_JQUERY_NO_CONFLICT,
             }, context_instance=template.RequestContext(request,
                 processors=self.model.feincms_item_editor_context_processors))
 
@@ -291,6 +296,7 @@ class ItemEditor(ItemEditorSuperClass):
             'errors': errors,
             'FEINCMS_ADMIN_MEDIA': settings.FEINCMS_ADMIN_MEDIA,
             'FEINCMS_ADMIN_MEDIA_HOTLINKING': settings.FEINCMS_ADMIN_MEDIA_HOTLINKING,
+            'FEINCMS_JQUERY_NO_CONFLICT': settings.FEINCMS_JQUERY_NO_CONFLICT,
             'FEINCMS_CONTENT_FIELDSET_NAME': FEINCMS_CONTENT_FIELDSET_NAME,
         })
 
@@ -510,6 +516,7 @@ class ItemEditor(ItemEditorSuperClass):
             'errors': errors,
             'FEINCMS_ADMIN_MEDIA': settings.FEINCMS_ADMIN_MEDIA,
             'FEINCMS_ADMIN_MEDIA_HOTLINKING': settings.FEINCMS_ADMIN_MEDIA_HOTLINKING,
+            'FEINCMS_JQUERY_NO_CONFLICT': settings.FEINCMS_JQUERY_NO_CONFLICT,
             'FEINCMS_CONTENT_FIELDSET_NAME': FEINCMS_CONTENT_FIELDSET_NAME,
         })
 

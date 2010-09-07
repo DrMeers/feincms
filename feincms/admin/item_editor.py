@@ -243,7 +243,7 @@ class ItemEditor(admin.ModelAdmin):
             
         new_object = self.model()
         if hasattr(self.model, '_feincms_templates'):
-            context['available_templates'] = self.model._feincms_templates
+            context['available_templates'] = new_object.available_templates()
             if request.method == 'POST':
                 # If there are errors in the form, we need to preserve the object's template as it was set when the user
                 # attempted to save it, so that the same regions appear on screen.
@@ -469,7 +469,7 @@ class ItemEditor(admin.ModelAdmin):
             media = media + formset.media
 
         if hasattr(self.model, '_feincms_templates'):
-            context['available_templates'] = self.model._feincms_templates
+            context['available_templates'] = obj.available_templates()
 
         if hasattr(self.model, 'parent'):
             context['has_parent_attribute'] = True

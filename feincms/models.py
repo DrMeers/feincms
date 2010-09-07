@@ -56,7 +56,8 @@ class Template(object):
     CMS object, most commonly a page.
     """
 
-    def __init__(self, title, path, regions, key=None, preview_image=None):
+    def __init__(self, title, path, regions, key=None, preview_image=None,
+                 available_to=None):
         # The key is what will be stored in the database. If key is undefined
         # use the template path as fallback.
         if not key:
@@ -66,6 +67,7 @@ class Template(object):
         self.title = title
         self.path = path
         self.preview_image = preview_image
+        self.available_to = available_to
 
         def _make_region(data):
             if isinstance(data, Region):
@@ -179,6 +181,15 @@ class Base(models.Model):
                     ('sidebar', _('Sidebar'), 'inherited'),
                     ),
                 }, {
+                'key': 'home',
+                'title': _('Home Page Template'),
+                'path': 'home.html',
+                'regions': (
+                    ('billboard', _('Billboard slideshow')),
+                    ('teasers', _('Teasers')),
+                    ),
+                'available_to': (lambda page: page.slug=='home'),
+                }, {                
                 'key': '2col',
                 'title': _('Template with two columns'),
                 'path': 'feincms_2col.html',
@@ -228,6 +239,13 @@ class Base(models.Model):
         for template in cls._feincms_templates.values():
             cls._feincms_all_regions.update(template.regions)
 
+    def available_templates(self):
+        return dict([(key,obj) for key,obj in self._feincms_templates.items()
+                     if obj.available_to is None or obj.available_to(self)])
+
+    # TODO: clean/save method to validate template choice based on
+    # available_templates?
+    
     @classmethod
     def register_extension(cls, register_fn):
         """

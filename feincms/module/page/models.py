@@ -104,7 +104,7 @@ class PageManager(models.Manager, ActiveAwareContentManagerMixin):
 
         return self.in_navigation().filter(parent__isnull=True)
 
-    def for_request(self, request, raise404=False, best_match=False, setup=True):
+    def for_request(self, request, raise404=False, best_match=False, setup=True, path=None):
         """
         Return a page for the request
 
@@ -119,7 +119,7 @@ class PageManager(models.Manager, ActiveAwareContentManagerMixin):
         """
 
         if not hasattr(request, '_feincms_page'):
-            path = request.path_info or request.path
+            path = path or request.path_info or request.path
 
             if best_match:
                 request._feincms_page = self.best_match_for_path(path, raise404=raise404)

@@ -19,7 +19,9 @@ class HandlerBase(TemplateView):
         return self.handler(request, *args, **kwargs)
 
     def handler(self, request, *args, **kwargs):
-        self.page = Page.objects.for_request(request, raise404=True, best_match=True, setup=False)
+        self.page = Page.objects.for_request(
+            request, raise404=True, best_match=True, setup=False,
+            path=kwargs.get('path'))
         response = self.prepare()
         if response:
             return response

@@ -7,5 +7,5 @@ handler = Handler.as_view()
 
 urlpatterns = patterns('',
     url(r'^$', handler, name='feincms_home'),
-    url(r'^(.*)/$', handler, name='feincms_handler'),
+    url(r'^(?P<path>.*)/$', handler, name='feincms_handler'),
 )

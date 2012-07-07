@@ -14,7 +14,7 @@ urlpatterns = patterns('',
         {'document_root': os.path.join(os.path.dirname(__file__), 'media/')}),
 
     url(r'', include('feincms.contrib.preview.urls')),
-    url(r'', include('feincms.views.cbv.urls')),
+    url(r'pages/', include('feincms.views.cbv.urls')),
 )
 
 urlpatterns += staticfiles_urlpatterns()

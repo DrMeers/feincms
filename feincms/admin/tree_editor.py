@@ -2,21 +2,20 @@
 # coding=utf-8
 # ------------------------------------------------------------------------
 
+from functools import reduce
 import json
 import logging
 
-from django.conf import settings as django_settings
-from django.contrib import admin
 from django.contrib.admin.views import main
 from django.contrib.admin.actions import delete_selected
-from django.db import router
+from django.contrib.staticfiles.templatetags.staticfiles import static
 from django.db.models import Q
 from django.http import (HttpResponse, HttpResponseBadRequest,
     HttpResponseForbidden, HttpResponseNotFound, HttpResponseServerError)
 from django.utils.html import escape
 from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext_lazy as _, ugettext
-from django.utils.encoding import force_unicode
+from django.utils.encoding import force_text
 
 from mptt.exceptions import InvalidMove
 from mptt.forms import MPTTAdminForm
@@ -24,7 +23,9 @@ from mptt.forms import MPTTAdminForm
 from feincms import settings
 from feincms.extensions import ExtensionModelAdmin
 
+
 logger = logging.getLogger(__name__)
+
 
 # ------------------------------------------------------------------------
 def django_boolean_icon(field_val, alt_text=None, title=None):
@@ -33,17 +34,18 @@ def django_boolean_icon(field_val, alt_text=None, title=None):
     """
 
     # Origin: contrib/admin/templatetags/admin_list.py
-    BOOLEAN_MAPPING = { True: 'yes', False: 'no', None: 'unknown' }
+    BOOLEAN_MAPPING = {True: 'yes', False: 'no', None: 'unknown'}
     alt_text = alt_text or BOOLEAN_MAPPING[field_val]
     if title is not None:
         title = 'title="%s" ' % title
     else:
         title = ''
-    return mark_safe(u'<img src="%sfeincms/img/icon-%s.gif" alt="%s" %s/>' %
-            (django_settings.STATIC_URL, BOOLEAN_MAPPING[field_val], alt_text, title))
+    icon_url = static('feincms/img/icon-%s.gif' % BOOLEAN_MAPPING[field_val])
+    return mark_safe(u'<img src="%s" alt="%s" %s/>' %
+            (icon_url, alt_text, title))
 
 
-def _build_tree_structure(cls):
+def _build_tree_structure(queryset):
     """
     Build an in-memory representation of the item tree, trying to keep
     database accesses down to a minimum. The returned dictionary looks like
@@ -55,18 +57,30 @@ def _build_tree_structure(cls):
          ...
          }
     """
-    all_nodes = { }
+    all_nodes = {}
 
-    mptt_opts = cls._mptt_meta
-
-    for p_id, parent_id in cls._default_manager.order_by(mptt_opts.tree_id_attr, mptt_opts.left_attr).values_list("pk", "%s_id" % mptt_opts.parent_attr):
+    mptt_opts = queryset.model._mptt_meta
+    items = queryset.order_by(
+        mptt_opts.tree_id_attr,
+        mptt_opts.left_attr)
+    values_list = items.values_list(
+        "pk",
+        "%s_id" % mptt_opts.parent_attr)
+    for p_id, parent_id in values_list:
         all_nodes[p_id] = []
 
         if parent_id:
-            if not all_nodes.has_key(parent_id):
+            if parent_id not in all_nodes:
                 # This happens very rarely, but protect against parents that
-                # we have yet to iteratove over.
+                # we have yet to iteratove over. Happens with broken MPTT
+                # hierarchy.
                 all_nodes[parent_id] = []
+                logger.warn(
+                    "Incorrect MPTT hierarchy for %s, node %d has left_attr"
+                    " < than one of its parents. Try rebuilding mptt data (use"
+                    " '%s._default_manager.rebuild()').",
+                    queryset.model.__name__, p_id, queryset.model.__name__)
+
             all_nodes[parent_id].append(p_id)
 
     return all_nodes
@@ -88,23 +102,24 @@ def ajax_editable_boolean_cell(item, attr, text='', override=None):
     (useful for "disabled and you can't change it" situations).
     """
     if text:
-        text = '&nbsp;(%s)' % unicode(text)
+        text = u'&nbsp;(%s)' % text
 
     if override is not None:
-        a = [ django_boolean_icon(override, text), text ]
+        a = [django_boolean_icon(override, text), text]
     else:
         value = getattr(item, attr)
         a = [
-              '<input type="checkbox"',
-              value and ' checked="checked"' or '',
-              ' onclick="inplace_toggle_boolean(%d, \'%s\').then($.fn.recolorRows);"' % (item.pk, attr),
-              ' />',
-              text,
+            '<input type="checkbox"',
+            value and ' checked="checked"' or '',
+            ' onclick="inplace_toggle_boolean(%d, \'%s\').then($.fn.recolorRows);"' % (item.pk, attr),
+            ' />',
+            text,
             ]
 
-    a.insert(0, '<div id="wrap_%s_%d">' % ( attr, item.pk ))
+    a.insert(0, '<div id="wrap_%s_%d">' % (attr, item.pk))
     a.append('</div>')
-    return unicode(''.join(a))
+    return u''.join(a)
+
 
 # ------------------------------------------------------------------------
 def ajax_editable_boolean(attr, short_description):
@@ -115,7 +130,7 @@ def ajax_editable_boolean(attr, short_description):
     Example::
 
         class MyTreeEditor(TreeEditor):
-            list_display = ('__unicode__', 'active_toggle')
+            list_display = ('__str__', 'active_toggle')
 
             active_toggle = ajax_editable_boolean('active', _('is active'))
     """
@@ -140,24 +155,35 @@ class ChangeList(main.ChangeList):
 
     def get_query_set(self, *args, **kwargs):
         mptt_opts = self.model._mptt_meta
-        return super(ChangeList, self).get_query_set(*args, **kwargs).order_by(mptt_opts.tree_id_attr, mptt_opts.left_attr)
+        qs = super(ChangeList, self).get_query_set(*args, **kwargs).\
+            order_by(mptt_opts.tree_id_attr, mptt_opts.left_attr)
+        # Force has_filters, so that the expand/collapse in sidebar is visible
+        self.has_filters = True
+        return qs
 
     def get_results(self, request):
         mptt_opts = self.model._mptt_meta
         if settings.FEINCMS_TREE_EDITOR_INCLUDE_ANCESTORS:
-            clauses = [Q(**{
-                mptt_opts.tree_id_attr: tree_id,
-                mptt_opts.left_attr + '__lte': lft,
-                mptt_opts.right_attr + '__gte': rght,
-                }
-                ) for lft, rght, tree_id in self.query_set.values_list(
-                    mptt_opts.left_attr,
-                    mptt_opts.right_attr,
-                    mptt_opts.tree_id_attr,
-                )]
+            clauses = [Q(**{mptt_opts.tree_id_attr: tree_id,
+                            mptt_opts.left_attr + '__lte': lft,
+                            mptt_opts.right_attr + '__gte': rght,
+                            })
+                    for lft, rght, tree_id in self.query_set.values_list(
+                        mptt_opts.left_attr,
+                        mptt_opts.right_attr,
+                        mptt_opts.tree_id_attr,
+                    )]
+            # We could optimise a bit here by explicitely filtering out
+            # any clauses that are for parents of nodes included in the
+            # queryset anyway. (ie: drop all clauses that refer to a node
+            # that is a parent to another node)
+
             if clauses:
-                queryset = self.model._default_manager.filter(
-                    reduce(lambda p, q: p|q, clauses))
+                # Note: Django ORM is smart enough to drop additional
+                # clauses if the initial query set is unfiltered. This
+                # is good.
+                queryset = self.query_set | self.model._default_manager.filter(
+                    reduce(lambda p, q: p | q, clauses))
 
                 if hasattr(self, 'queryset'):
                     self.queryset = queryset
@@ -170,9 +196,13 @@ class ChangeList(main.ChangeList):
         # Pre-process permissions because we still have the request here,
         # which is not passed in later stages in the tree editor
         for item in self.result_list:
-            item.feincms_changeable = self.model_admin.has_change_permission(request, item)
-            item.feincms_addable    = (item.feincms_changeable and
-                                       self.model_admin.has_add_permission(request, item))
+            item.feincms_changeable = self.model_admin.has_change_permission(
+                request, item)
+
+            item.feincms_addable = (
+                item.feincms_changeable
+                and self.model_admin.has_add_permission(request, item))
+
 
 # ------------------------------------------------------------------------
 class TreeEditor(ExtensionModelAdmin):
@@ -209,7 +239,7 @@ class TreeEditor(ExtensionModelAdmin):
             'admin/feincms/tree_editor.html',
             ]
         self.object_change_permission = opts.app_label + '.' + opts.get_change_permission()
-        self.object_add_permission    = opts.app_label + '.' + opts.get_add_permission()
+        self.object_add_permission = opts.app_label + '.' + opts.get_add_permission()
         self.object_delete_permission = opts.app_label + '.' + opts.get_delete_permission()
 
     def changeable(self, item):
@@ -228,22 +258,26 @@ class TreeEditor(ExtensionModelAdmin):
             url = None
 
         if url:
-            r = '<input type="hidden" class="medialibrary_file_path" value="%s" id="_refkey_%d" />' % (
-                        url,
-                        item.pk
-                      )
+            r = (
+                '<input type="hidden" class="medialibrary_file_path"'
+                ' value="%s" id="_refkey_%d" />') % (url, item.pk)
 
         changeable_class = ''
         if not self.changeable(item):
             changeable_class = ' tree-item-not-editable'
 
-        r += '<span id="page_marker-%d" class="page_marker%s" style="width: %dpx;">&nbsp;</span>&nbsp;' % (
-                item.pk, changeable_class, 14+getattr(item, mptt_opts.level_attr)*18)
+        r += (
+            '<span id="page_marker-%d" class="page_marker%s"'
+            ' style="width: %dpx;">&nbsp;</span>&nbsp;') % (
+                item.pk,
+                changeable_class,
+                14 + getattr(item, mptt_opts.level_attr) * 18)
+
 #        r += '<span tabindex="0">'
         if hasattr(item, 'short_title') and callable(item.short_title):
             r += escape(item.short_title())
         else:
-            r += escape(unicode(item))
+            r += escape(u'%s' % item)
 #        r += '</span>'
         return mark_safe(r)
     indented_short_title.short_description = _('title')
@@ -318,7 +352,7 @@ class TreeEditor(ExtensionModelAdmin):
 
         new_state = not getattr(obj, attr)
         logger.info("Toggle %s on #%d %s to %s by \"%s\"",
-                     attr, obj.pk, obj, "on" if new_state else "off", request.user)
+            attr, obj.pk, obj, "on" if new_state else "off", request.user)
 
         try:
             before_data = self._ajax_editable_booleans[attr](self, obj)
@@ -326,7 +360,8 @@ class TreeEditor(ExtensionModelAdmin):
             setattr(obj, attr, new_state)
             obj.save()
 
-            self._refresh_changelist_caches() # ???: Perhaps better a post_save signal?
+            # ???: Perhaps better a post_save signal?
+            self._refresh_changelist_caches()
 
             # Construct html snippets to send back to client for status update
             data = self._ajax_editable_booleans[attr](self, obj)
@@ -367,8 +402,9 @@ class TreeEditor(ExtensionModelAdmin):
         self._refresh_changelist_caches()
 
         extra_context = extra_context or {}
+        queryset = self.queryset(request)
         extra_context['tree_structure'] = mark_safe(json.dumps(
-                                                    _build_tree_structure(self.model)))
+                                                    _build_tree_structure(queryset)))
 
         return super(TreeEditor, self).changelist_view(request, extra_context, *args, **kwargs)
 
@@ -417,8 +453,9 @@ class TreeEditor(ExtensionModelAdmin):
         else:
             tree_manager = self.model._tree_manager
 
-        cut_item = tree_manager.get(pk=request.POST.get('cut_item'))
-        pasted_on = tree_manager.get(pk=request.POST.get('pasted_on'))
+        queryset = self.queryset(request)
+        cut_item = queryset.get(pk=request.POST.get('cut_item'))
+        pasted_on = queryset.get(pk=request.POST.get('pasted_on'))
         position = request.POST.get('position')
 
         if not self.has_change_permission(request, cut_item):
@@ -428,12 +465,14 @@ class TreeEditor(ExtensionModelAdmin):
         if position in ('last-child', 'left', 'right'):
             try:
                 tree_manager.move_node(cut_item, pasted_on, position)
-            except InvalidMove, e:
-                self.message_user(request, unicode(e))
+            except InvalidMove as e:
+                self.message_user(request, u'%s' % e)
                 return HttpResponse('FAIL')
 
-            # Ensure that model save has been run
-            cut_item = self.model.objects.get(pk=cut_item.pk)
+            # Ensure that model save method has been run (required to
+            # update Page._cached_url values, might also be helpful for other
+            # models inheriting MPTTModel)
+            cut_item = queryset.get(pk=cut_item.pk)
             cut_item.save()
 
             self.message_user(request, ugettext('%s has been moved to a new position.') %
@@ -466,7 +505,7 @@ class TreeEditor(ExtensionModelAdmin):
                 if self.has_delete_permission(request, obj):
                     obj.delete()
                     n += 1
-                    obj_display = force_unicode(obj)
+                    obj_display = force_text(obj)
                     self.log_deletion(request, obj, obj_display)
                 else:
                     logger.warning(

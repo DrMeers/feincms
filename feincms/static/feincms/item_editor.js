@@ -111,17 +111,17 @@ if(!Array.indexOf) {
         var mouseenter_timeout;
         var mouseleave_timeout;
         function hide_controls() {
-            item_controls.find("*").fadeOut(800);
+            item_controls.find("*").fadeOut(400);
             is_hidden = true;
         }
         function show_controls() {
-            item_controls.find("*").fadeIn(800);
+            item_controls.find("*").fadeIn(200);
             is_hidden = false;
         }
         item_controls.unbind('mouseleave'); // Unbind in case it's already been bound.
         item_controls.mouseleave(function() {
             clearTimeout(mouseenter_timeout);
-            mouseleave_timeout = setTimeout(hide_controls, 1000);
+            mouseleave_timeout = setTimeout(hide_controls, 200);
         });
         item_controls.unbind('mouseenter'); // Unbind in case it's already been bound.
         item_controls.mouseenter(function() {
@@ -426,6 +426,7 @@ if(!Array.indexOf) {
         function on_template_key_changed(){
             var input_element = this;
             var new_template = this.value;
+            var form_element = $(input_element).parents('form');
 
             if(current_template==new_template)
                 // Selected template did not change
@@ -463,15 +464,15 @@ if(!Array.indexOf) {
 
                     input_element.checked = true;
 
-                    $('#page_form').append('<input type="hidden" name="_continue" value="1" />');
+                    form_element.append('<input type="hidden" name="_continue" value="1" />');
                     /* Simulate a click on the save button instead of form.submit(), so
                        that the submit handlers from FilteredSelectMultiple get
                        invoked. See Issue #372 */
-                    $('#page_form input[type=submit][name=_save]').click();
+                    form_element.find('input[type=submit][name=_save]').click();
 
                 } else {
                     $("div#popup_bg").remove();
-                    $(input_element).val($(input_element).data('original_value')); // Restore original value
+                    form_element.val($(input_element).data('original_value')); // Restore original value
                 }
             });
 
@@ -524,7 +525,7 @@ if(!Array.indexOf) {
         $(".order-machine").sortable({
             handle: '.handle',
             helper: function(event, ui){
-                var h2 = $("<h2>").html($(ui.item).find('span.modname').html());
+                var h2 = $("<h2>").html($(ui).find('span.modname').html());
                 return $("<fieldset>").addClass("helper module").append(h2);
             },
             placeholder: 'highlight',

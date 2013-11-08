@@ -7,6 +7,7 @@ from django.contrib.sitemaps import Sitemap
 
 from feincms.module.page.models import Page
 
+
 # ------------------------------------------------------------------------
 class PageSitemap(Sitemap):
     """
@@ -33,15 +34,15 @@ class PageSitemap(Sitemap):
         level, in_navigation and optionally modification_date.
         """
         super(PageSitemap, self).__init__(*args, **kwargs)
-        self.depth_cutoff        = max_depth
-        self.navigation_only     = navigation_only
-        self.changefreq          = changefreq
-        self.filter              = filter
+        self.depth_cutoff = max_depth
+        self.navigation_only = navigation_only
+        self.changefreq = changefreq
+        self.filter = filter
         self.extended_navigation = extended_navigation
         if queryset is not None:
-            self.queryset        = queryset
+            self.queryset = queryset
         else:
-            self.queryset        = Page.objects.active()
+            self.queryset = Page.objects.active()
 
     def items(self):
         """
@@ -62,9 +63,9 @@ class PageSitemap(Sitemap):
         if self.navigation_only:
             qs = qs.filter(in_navigation=True)
         if self.depth_cutoff > 0:
-            qs = qs.filter(level__lte=self.max_depth-1)
+            qs = qs.filter(level__lte=self.max_depth - 1)
 
-        pages = [ p for p in qs if p.is_active() ]
+        pages = [p for p in qs if p.is_active()]
 
         if self.extended_navigation:
             for idx, page in enumerate(pages):
@@ -107,15 +108,5 @@ class PageSitemap(Sitemap):
             prio += 1.2 * self.per_level
 
         return "%0.2g" % min(1.0, prio)
-
-    # After a call to the sitemap, be sure to erase the cached _paginator
-    # attribute, so next time we'll re-fetch the items list instead of using
-    # a stale list.
-    # This has been fixed in Django r17468
-    def get_urls(self, *args, **kwargs):
-        urls = super(PageSitemap, self).get_urls(*args, **kwargs)
-        if hasattr(self, '_paginator'):
-            del(self._paginator)
-        return urls
 
 # ------------------------------------------------------------------------

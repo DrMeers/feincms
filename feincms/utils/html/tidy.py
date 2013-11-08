@@ -3,6 +3,17 @@
 import re
 import tidylib
 
+from django.utils import six
+
+
+try:
+    # Python 2
+    unichr
+except NameError:
+    # Python 3
+    unichr = chr
+
+
 # Based on http://stackoverflow.com/questions/92438/stripping-non-printable-characters-from-a-string-in-python
 #
 # We omit chars 9-13 (tab, newline, vertical tab, form feed, return) and 32
@@ -24,7 +35,7 @@ def tidy_html(html):
     Input must be unicode.
     Output will be valid XHTML.
     """
-    if not isinstance(html, unicode):
+    if not isinstance(html, six.text_type):
         raise ValueError("tidyhtml must be called with a Unicode string!")
 
     errors = list()
@@ -47,17 +58,15 @@ def tidy_html(html):
         tidy_f = tidylib.tidy_fragment
         doc_mode = False
 
-    html, messages = tidy_f(
-        html.strip(),
-        {
-            "char-encoding":               "utf8",
-            "clean":                        False,
-            "drop-empty-paras":             False,
-            "drop-font-tags":               True,
-            "drop-proprietary-attributes":  False,
-            "fix-backslash":                True,
-            "indent":                       True,
-            "output-xhtml":                 True,
+    html, messages = tidy_f(html.strip(), {
+        "char-encoding": "utf8",
+        "clean": False,
+        "drop-empty-paras": False,
+        "drop-font-tags": True,
+        "drop-proprietary-attributes": False,
+        "fix-backslash": True,
+        "indent": True,
+        "output-xhtml": True,
         }
     )
 

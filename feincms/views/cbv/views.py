@@ -4,8 +4,8 @@ from django.http import Http404
 from feincms import settings
 from feincms.module.mixins import ContentView
 
-class Handler(ContentView):
 
+class Handler(ContentView):
     page_model_path = 'page.Page'
     context_object_name = 'feincms_page'
 
@@ -18,13 +18,16 @@ class Handler(ContentView):
         return self._page_model
 
     def get_object(self):
+        path = None
+        if self.args:
+            path = self.args[0]
         return self.page_model._default_manager.for_request(
-            self.request, raise404=True, best_match=True)
+            self.request, raise404=True, best_match=True, path=path)
 
     def dispatch(self, request, *args, **kwargs):
         try:
             return super(Handler, self).dispatch(request, *args, **kwargs)
-        except Http404, e:
+        except Http404 as e:
             if settings.FEINCMS_CMS_404_PAGE:
                 try:
                     request.original_path_info = request.path_info

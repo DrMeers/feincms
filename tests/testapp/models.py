@@ -1,5 +1,6 @@
 from django import forms
 from django.db import models
+from django.utils.encoding import python_2_unicode_compatible
 from django.utils.text import capfirst
 from django.utils.translation import ugettext_lazy as _
 
@@ -47,8 +48,15 @@ Page.create_content_type(ApplicationContent, APPLICATIONS=(
     ('whatever', 'Test Urls', {'urls': 'testapp.applicationcontent_urls'}),
     ))
 
-Entry.register_regions(('main', 'Main region'), ('another', 'Another region'))
-
+Entry.register_extensions(
+    'feincms.module.extensions.seo',
+    'feincms.module.extensions.translations',
+    'feincms.module.extensions.seo',
+    'feincms.module.extensions.ct_tracker',
+    )
+Entry.register_regions(
+    ('main', 'Main region'),
+    )
 Entry.create_content_type(RawContent)
 Entry.create_content_type(ImageContent, POSITION_CHOICES=(
     ('default', 'Default position'),
@@ -67,7 +75,7 @@ class BlogEntriesNavigationExtension(NavigationExtension):
         for entry in Entry.objects.all():
             yield PagePretender(
                 title=entry.title,
-                url=reverse('testapp.blog_urls/blog_entry_details', kwargs={'object_id': entry.id}),
+                url=reverse('testapp.blog_urls/blog_entry_detail', kwargs={'object_id': entry.id}),
                 )
 
 Page.register_extensions(
@@ -76,6 +84,7 @@ Page.register_extensions(
     )
 
 
+@python_2_unicode_compatible
 class Category(MPTTModel):
     name = models.CharField(max_length=20)
     slug = models.SlugField()
@@ -87,7 +96,7 @@ class Category(MPTTModel):
         verbose_name = 'category'
         verbose_name_plural = 'categories'
 
-    def __unicode__(self):
+    def __str__(self):
         return self.name
 
 
@@ -95,4 +104,3 @@ class Category(MPTTModel):
 Entry.add_to_class('categories',
     models.ManyToManyField(Category, blank=True, null=True))
 EntryAdmin.list_filter += ('categories',)
-

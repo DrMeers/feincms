@@ -16,6 +16,7 @@ from django.utils import timezone
 from django.utils.cache import patch_response_headers
 from django.utils.translation import ugettext_lazy as _
 
+
 # ------------------------------------------------------------------------
 def format_date(d, if_none=''):
     """
@@ -23,14 +24,17 @@ def format_date(d, if_none=''):
     year. Also return a default value if no date is passed in.
     """
 
-    if d is None: return if_none
+    if d is None:
+        return if_none
 
     now = timezone.now()
     fmt = (d.year == now.year) and '%d.%m' or '%d.%m.%Y'
     return d.strftime(fmt)
 
+
 def latest_children(self):
     return self.get_children().order_by('-publication_date')
+
 
 # ------------------------------------------------------------------------
 def granular_now(n=None):
@@ -46,6 +50,7 @@ def granular_now(n=None):
     return timezone.make_aware(datetime(n.year, n.month, n.day, n.hour,
                                         (n.minute // 5) * 5), n.tzinfo)
 
+
 # ------------------------------------------------------------------------
 def datepublisher_response_processor(page, request, response):
     """
@@ -58,18 +63,24 @@ def datepublisher_response_processor(page, request, response):
     if expires is not None:
         now = datetime.now()
         delta = expires - now
-        delta = int(delta.days * 86400 + delta.seconds)
+
+        try:
+            delta = int(delta.days * 86400 + delta.seconds)
+        except Exception:
+            # This happens once every four years (or so)
+            delta = int(delta.days * 86400 + delta.seconds - 7200)
+
         patch_response_headers(response, delta)
+
 
 # ------------------------------------------------------------------------
 def register(cls, admin_cls):
     cls.add_to_class('publication_date',
-                                models.DateTimeField(_('publication date'),
-        default=granular_now))
+        models.DateTimeField(_('publication date'), default=granular_now))
     cls.add_to_class('publication_end_date',
-                                models.DateTimeField(_('publication end date'),
-        blank=True, null=True,
-        help_text=_('Leave empty if the entry should stay active forever.')))
+        models.DateTimeField(_('publication end date'),
+            blank=True, null=True,
+            help_text=_('Leave empty if the entry should stay active forever.')))
     cls.add_to_class('latest_children', latest_children)
 
     # Patch in rounding the pub and pub_end dates on save
@@ -94,15 +105,15 @@ def register(cls, admin_cls):
     # Processor to patch up response headers for expiry date
     cls.register_response_processor(datepublisher_response_processor)
 
-    def datepublisher_admin(self, page):
+    def datepublisher_admin(self):
         return u'%s &ndash; %s' % (
-            format_date(page.publication_date),
-            format_date(page.publication_end_date, '&infin;'),
+            format_date(self.publication_date),
+            format_date(self.publication_end_date, '&infin;'),
             )
     datepublisher_admin.allow_tags = True
     datepublisher_admin.short_description = _('visible from - to')
 
-    admin_cls.datepublisher_admin = datepublisher_admin
+    cls.datepublisher_admin = datepublisher_admin
     try:
         pos = admin_cls.list_display.index('is_visible_admin')
     except ValueError:

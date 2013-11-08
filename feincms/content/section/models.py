@@ -1,4 +1,3 @@
-from django import forms
 from django.conf import settings as django_settings
 from django.contrib import admin
 from django.core.exceptions import ImproperlyConfigured
@@ -44,10 +43,14 @@ class SectionContent(models.Model):
     @classmethod
     def initialize_type(cls, TYPE_CHOICES=None, cleanse=None):
         if 'feincms.module.medialibrary' not in django_settings.INSTALLED_APPS:
-            raise ImproperlyConfigured, 'You have to add \'feincms.module.medialibrary\' to your INSTALLED_APPS before creating a %s' % cls.__name__
+            raise ImproperlyConfigured(
+                'You have to add \'feincms.module.medialibrary\' to your'
+                ' INSTALLED_APPS before creating a %s' % cls.__name__)
 
         if TYPE_CHOICES is None:
-            raise ImproperlyConfigured, 'You need to set TYPE_CHOICES when creating a %s' % cls.__name__
+            raise ImproperlyConfigured(
+                'You need to set TYPE_CHOICES when creating a'
+                ' %s' % cls.__name__)
 
         cls.add_to_class('type', models.CharField(_('type'),
             max_length=10, choices=TYPE_CHOICES,
@@ -68,9 +71,9 @@ class SectionContent(models.Model):
             mediafile_type = 'nomedia'
 
         return render_to_string([
-            'content/section/%s_%s.html' % (self.type, mediafile_type),
-            'content/section/%s.html' % self.type,
+            'content/section/%s_%s.html' % (mediafile_type, self.type),
             'content/section/%s.html' % mediafile_type,
+            'content/section/%s.html' % self.type,
             'content/section/default.html',
             ], {'content': self})
 

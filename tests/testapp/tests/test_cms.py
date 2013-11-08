@@ -17,7 +17,7 @@ from feincms.content.raw.models import RawContent
 from feincms.content.richtext.models import RichTextContent
 from feincms.content.video.models import VideoContent
 
-from .tests import ExampleCMSBase, Empty, ExampleCMSBase2
+from .test_stuff import ExampleCMSBase, Empty, ExampleCMSBase2
 
 # ------------------------------------------------------------------------
 class SubRawContent(RawContent):
@@ -56,8 +56,8 @@ class CMSBaseTest(TestCase):
         # the tests run faster.
         _orig_parse = feedparser.parse
         def _new_parse(link):
-            return _orig_parse(
-                open(os.path.join(os.path.dirname(__file__), 'yahoo.rss')))
+            return _orig_parse(open(
+                os.path.join(os.path.dirname(__file__), 'yahoo.rss'), 'rb'))
         feedparser.parse = _new_parse
 
         type = ExampleCMSBase.create_content_type(RSSContent)

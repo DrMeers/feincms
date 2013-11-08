@@ -6,7 +6,6 @@ from email.utils import parsedate
 from time import mktime
 import re
 
-from django.core import urlresolvers
 from django.core.urlresolvers import Resolver404, resolve, reverse, NoReverseMatch
 from django.db import models
 from django.db.models import signals
@@ -15,7 +14,6 @@ from django.utils.functional import curry as partial, lazy, wraps
 from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext_lazy as _
 
-from feincms import settings
 from feincms.admin.item_editor import ItemEditorForm
 from feincms.contrib.fields import JSONField
 from feincms.utils import get_object
@@ -132,7 +130,7 @@ def app_reverse(viewname, urlconf=None, args=None, kwargs=None, prefix=None,
                 cache_key = 'tree'
                 # just one match within the tree, use it
                 content = tree_contents[0]
-            else: # len(tree_contents) > 1
+            else:  # len(tree_contents) > 1
                 cache_key = 'all'
                 try:
                     # select all ancestors and descendants and get the one with
@@ -143,8 +141,9 @@ def app_reverse(viewname, urlconf=None, args=None, kwargs=None, prefix=None,
                     ) | tree_contents.filter(
                         parent__lft__lte=proximity_info[2],
                         parent__lft__gte=proximity_info[1],
-                    )).extra({'level_diff':"abs(level-%d)" % proximity_info[3]}
-                        ).order_by('level_diff')[0]
+                    )).extra({
+                        'level_diff': "abs(100 + level - %d)" % proximity_info[3]
+                    }).order_by('level_diff')[0]
                 except IndexError:
                     content = tree_contents[0]
         else:
@@ -239,9 +238,9 @@ class ApplicationContent(models.Model):
                 app_conf = {}
 
             cls.ALL_APPS_CONFIG[urls] = {
-                "urls":     urls,
-                "name":     name,
-                "config":   app_conf
+                "urls": urls,
+                "name": name,
+                "config": app_conf
             }
 
         cls.add_to_class('urlconf_path',
@@ -250,11 +249,12 @@ class ApplicationContent(models.Model):
         )
 
         class ApplicationContentItemEditorForm(ItemEditorForm):
-            app_config    = {}
+            app_config = {}
             custom_fields = {}
 
             def __init__(self, *args, **kwargs):
-                super(ApplicationContentItemEditorForm, self).__init__(*args, **kwargs)
+                super(ApplicationContentItemEditorForm, self).__init__(
+                    *args, **kwargs)
 
                 instance = kwargs.get("instance", None)
 
@@ -303,11 +303,13 @@ class ApplicationContent(models.Model):
         cls.feincms_item_editor_form = ApplicationContentItemEditorForm
 
         # Make sure the patched reverse() method has all information it needs
-        cls.parent.field.rel.to.register_request_processor(
-            retrieve_page_information)
+        page_class = cls.parent.field.rel.to
+        page_class.register_request_processor(retrieve_page_information)
 
         signals.post_save.connect(_empty_reverse_cache, sender=cls)
         signals.post_delete.connect(_empty_reverse_cache, sender=cls)
+        signals.post_save.connect(_empty_reverse_cache, sender=page_class)
+        signals.post_delete.connect(_empty_reverse_cache, sender=page_class)
 
     def __init__(self, *args, **kwargs):
         super(ApplicationContent, self).__init__(*args, **kwargs)
@@ -385,7 +387,7 @@ class ApplicationContent(models.Model):
         else:
             self.rendered_result = mark_safe(output)
 
-        return True # successful
+        return True  # successful
 
     def send_directly(self, request, response):
         mimetype = response.get('Content-Type', 'text/plain')

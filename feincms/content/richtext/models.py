@@ -58,14 +58,18 @@ class RichTextContentAdminForm(ItemEditorForm):
 
         return cleaned_data
 
+
 class RichTextContent(models.Model):
     """
     Rich text content. Uses TinyMCE by default, but can be configured to do
     anything you want using ``FEINCMS_RICHTEXT_INIT_CONTEXT`` and
     ``FEINCMS_RICHTEXT_INIT_TEMPLATE``.
 
-    Optionally runs the HTML code through HTML cleaners if you pass a callable
-    as ``cleanse`` when calling ``create_content_type``.
+    If you are using TinyMCE 4.x then ``FEINCMS_RICHTEXT_INIT_TEMPLATE``
+    needs to be set to ``admin/content/richtext/init_tinymce4.html``.
+
+    Optionally runs the HTML code through HTML cleaners if you specify
+    ``cleanse=True`` when calling ``create_content_type``.
     """
 
     form = RichTextContentAdminForm
@@ -75,7 +79,7 @@ class RichTextContent(models.Model):
         lambda x: settings.FEINCMS_RICHTEXT_INIT_CONTEXT,
     )
     feincms_item_editor_includes = {
-        'head': [ settings.FEINCMS_RICHTEXT_INIT_TEMPLATE ],
+        'head': [settings.FEINCMS_RICHTEXT_INIT_TEMPLATE],
     }
 
     text = RichTextField(_('text'), blank=True)
@@ -87,7 +91,7 @@ class RichTextContent(models.Model):
 
     def render(self, **kwargs):
         return render_to_string('content/richtext/default.html',
-            { 'content': self }, context_instance=kwargs.get('context'))
+            {'content': self}, context_instance=kwargs.get('context'))
 
     def save(self, *args, **kwargs):
         # TODO: Move this to the form?
@@ -114,5 +118,5 @@ class RichTextContent(models.Model):
             # Make sure we can load the tidy function without dependency failures:
             try:
                 get_object(settings.FEINCMS_TIDY_FUNCTION)
-            except ImportError, e:
+            except ImportError as e:
                 raise ImproperlyConfigured("FEINCMS_TIDY_HTML is enabled but the HTML tidy function %s could not be imported: %s" % (settings.FEINCMS_TIDY_FUNCTION, e))

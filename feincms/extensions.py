@@ -2,11 +2,12 @@
 Base types for extensions refactor
 """
 
-import re
 import warnings
+from functools import wraps
 
 from django.contrib import admin
 from django.core.exceptions import ImproperlyConfigured
+from django.utils import six
 
 from feincms.utils import get_object
 
@@ -43,7 +44,7 @@ class ExtensionsMixin(object):
 
             extension = None
 
-            if isinstance(ext, basestring):
+            if isinstance(ext, six.string_types):
                 try:
                     extension = get_object(ext)
                 except (AttributeError, ImportError, ValueError):
@@ -94,6 +95,13 @@ class Extension(object):
         pass
 
 
+def _ensure_list(cls, attribute):
+    if cls is None:
+        return
+    value = getattr(cls, attribute, ()) or ()
+    setattr(cls, attribute, list(value))
+
+
 class LegacyExtension(Extension):
     """
     Wrapper for legacy extensions
@@ -118,18 +126,25 @@ class LegacyExtension(Extension):
 
     def handle_modeladmin(self, modeladmin):
         if self.fieldsets:
+            _ensure_list(modeladmin, 'fieldsets')
             modeladmin.fieldsets.extend(self.fieldsets)
         if self.filter_horizontal:
+            _ensure_list(modeladmin, 'filter_horizontal')
             modeladmin.filter_horizontal.extend(self.filter_horizontal)
         if self.filter_vertical:
+            _ensure_list(modeladmin, 'filter_vertical')
             modeladmin.filter_vertical.extend(self.filter_vertical)
         if self.list_display:
+            _ensure_list(modeladmin, 'list_display')
             modeladmin.list_display.extend(self.list_display)
         if self.list_filter:
+            _ensure_list(modeladmin, 'list_filter')
             modeladmin.list_filter.extend(self.list_filter)
         if self.raw_id_fields:
+            _ensure_list(modeladmin, 'raw_id_fields')
             modeladmin.raw_id_fields.extend(self.raw_id_fields)
         if self.search_fields:
+            _ensure_list(modeladmin, 'search_fields')
             modeladmin.search_fields.extend(self.search_fields)
 
         if self.extension_options:
@@ -171,3 +186,20 @@ class ExtensionModelAdmin(admin.ModelAdmin):
                 # Fall back to first fieldset if second does not exist
                 # XXX This is really messy.
                 self.fieldsets[0][1]['fields'].extend(f)
+
+
+def prefetch_modeladmin_get_queryset(modeladmin, *lookups):
+    """
+    Wraps default modeladmin ``get_queryset`` to prefetch related lookups.
+    """
+    def do_wrap(f):
+        @wraps(f)
+        def wrapper(request, *args, **kwargs):
+            qs = f(request, *args, **kwargs)
+            qs = qs.prefetch_related(*lookups)
+            return qs
+        return wrapper
+
+    # queryset is renamed to get_queryset in Django 1.6
+    fn = "get_queryset" if hasattr(modeladmin, "get_queryset") else "queryset"
+    setattr(modeladmin, fn, do_wrap(getattr(modeladmin, fn)))

@@ -8,6 +8,7 @@ from django.views.generic.base import TemplateResponseMixin
 from feincms import settings
 from feincms.views.decorators import standalone
 
+
 class ContentModelMixin(object):
     """
     Mixin for ``feincms.models.Base`` subclasses which need need some degree of
@@ -56,6 +57,7 @@ class ContentModelMixin(object):
     def module_name(self):
         "See app_label"
         return self.__class__.__name__.lower()
+
 
 class ContentObjectMixin(TemplateResponseMixin):
     """
@@ -138,7 +140,7 @@ class ContentObjectMixin(TemplateResponseMixin):
         if not getattr(self.object, 'request_processors', None):
             return
 
-        for fn in reversed(self.object.request_processors.values()):
+        for fn in reversed(list(self.object.request_processors.values())):
             r = fn(self.object, self.request)
             if r:
                 return r
@@ -176,7 +178,7 @@ class ContentObjectMixin(TemplateResponseMixin):
                     successful = r
                 elif r:
                     return r
-            except Http404, e:
+            except Http404 as e:
                 http404 = e
 
         if not successful:

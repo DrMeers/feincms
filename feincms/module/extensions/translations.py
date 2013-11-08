@@ -27,8 +27,10 @@ from feincms import extensions, settings
 from feincms.translations import is_primary_language
 from feincms._internal import monkeypatch_method, monkeypatch_property
 
+
 # ------------------------------------------------------------------------
 logger = logging.getLogger(__name__)
+
 
 # ------------------------------------------------------------------------
 def user_has_language_set(request):
@@ -42,6 +44,7 @@ def user_has_language_set(request):
     if django_settings.LANGUAGE_COOKIE_NAME in request.COOKIES:
         return True
     return False
+
 
 # ------------------------------------------------------------------------
 def translation_set_language(request, select_language):
@@ -76,6 +79,7 @@ def translation_set_language(request, select_language):
         response.set_cookie(django_settings.LANGUAGE_COOKIE_NAME, select_language)
         return response
 
+
 # ------------------------------------------------------------------------
 def translations_request_processor_explicit(page, request):
     # If this page is just a redirect, don't do any language specific setup
@@ -96,6 +100,7 @@ def translations_request_processor_explicit(page, request):
 
     return translation_set_language(request, desired_language)
 
+
 # ------------------------------------------------------------------------
 def translations_request_processor_standard(page, request):
     # If this page is just a redirect, don't do any language specific setup
@@ -107,6 +112,7 @@ def translations_request_processor_standard(page, request):
 
     return translation_set_language(request, page.language)
 
+
 # ------------------------------------------------------------------------
 def get_current_language_code(request):
     language_code = getattr(request, 'LANGUAGE_CODE', None)
@@ -114,8 +120,10 @@ def get_current_language_code(request):
         logger.warning("Could not access request.LANGUAGE_CODE. Is 'django.middleware.locale.LocaleMiddleware' in MIDDLEWARE_CLASSES?")
     return language_code
 
+
 # ------------------------------------------------------------------------
 class Extension(extensions.Extension):
+
     def handle_model(self):
         cls = self.model
 
@@ -132,12 +140,13 @@ class Extension(extensions.Extension):
             if settings.FEINCMS_TRANSLATION_POLICY == "EXPLICIT":
                 cls.register_request_processor(translations_request_processor_explicit,
                     key='translations')
-            else: # STANDARD
+            else:  # STANDARD
                 cls.register_request_processor(translations_request_processor_standard,
                     key='translations')
 
         if hasattr(cls, 'get_redirect_to_target'):
             original_get_redirect_to_target = cls.get_redirect_to_target
+
             @monkeypatch_method(cls)
             def get_redirect_to_target(self, request):
                 """
@@ -158,13 +167,16 @@ class Extension(extensions.Extension):
 
         @monkeypatch_method(cls)
         def available_translations(self):
-            if not self.id: # New, unsaved pages have no translations
+            if not self.id:  # New, unsaved pages have no translations
                 return []
             if is_primary_language(self.language):
                 return self.translations.all()
             elif self.translation_of:
-                return [self.translation_of] + list(self.translation_of.translations.exclude(
-                    language=self.language))
+                # reuse prefetched queryset, do not filter it
+                res = [t for t in list(self.translation_of.translations.all())
+                       if t.language != self.language]
+                res.insert(0, self.translation_of)
+                return res
             else:
                 return []
 
@@ -185,6 +197,9 @@ class Extension(extensions.Extension):
             return self.original_translation.translations.get(language=language)
 
     def handle_modeladmin(self, modeladmin):
+
+        extensions.prefetch_modeladmin_get_queryset(
+            modeladmin, 'translation_of__translations', 'translations')
 
         def available_translations_admin(self, page):
             translations = dict((p.language, p.id) for p in page.available_translations())
@@ -216,5 +231,4 @@ class Extension(extensions.Extension):
 
         modeladmin.raw_id_fields.append('translation_of')
 
-# ------------------------------------------------------------------------
 # ------------------------------------------------------------------------
